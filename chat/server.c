@@ -12,14 +12,12 @@
 #include <unistd.h>
 
 
-#define QTD_CLIENT 5
+#define QTD_CLIENT 3
 
 int clientsock[QTD_CLIENT];
-
 pthread_t thread[QTD_CLIENT];
 pthread_mutex_t lockwrite;
 struct sockaddr_in serv_addr, cli_addr;
-
 
 
 void error(char *msg)
@@ -27,6 +25,7 @@ void error(char *msg)
     perror(msg);
     exit(1);
 }
+
 
 /* Funcao que recebe a mensagem do cliente e remove o nickname
    e retorna apenas a mensagem */
@@ -40,7 +39,6 @@ char* remove_nickname(char *nick){
 	}
 	final = strlen(nick) - i;
 	char mensagem[final];
-
   memcpy(mensagem, &nick[i], final);
 	bzero(nick, 256);
 	strcpy(nick, mensagem);
@@ -60,7 +58,6 @@ void* read_socket(void* newsockfd){ /* espera void*  */
         if (n < 0) error("ERROR reading from socket");
 
         strcpy(msg, buffer);
-
         remove_nickname(msg);
 
         if(strcmp(msg,"bye") == 0){
@@ -79,10 +76,9 @@ void* read_socket(void* newsockfd){ /* espera void*  */
                 }
                 j++;
               }
-              pthread_exit((void*)thread[i]); /* Nao tava cancelando na hora com o cancel */
-              /* Eu acho que eh pq a thread morre, dai nao termina o loop
-                 era isso mesmo */
+              pthread_exit((void*)thread[i]); /* mata a thread do client que saiu */
 
+             /* Avisa aos demais clientes que alguem saiu.. */
             }else if(clientsock[i] != -1){
               strcpy(nickname, buffer);
               nickname[strcspn(nickname, ":")] = 0;
@@ -93,6 +89,7 @@ void* read_socket(void* newsockfd){ /* espera void*  */
           }
         }
 
+        /* Envia a mensagem para todos os clientes, exceto quem esta enviando */
         for(i=0; i < QTD_CLIENT; i++){
           pthread_mutex_lock(&lockwrite);
           if((clientsock[i] != -1) && (clientsock[i] != *(int*)newsockfd)){
@@ -105,7 +102,7 @@ void* read_socket(void* newsockfd){ /* espera void*  */
       return NULL;
 }
 
-
+/* Funcao para criar o socket */
 int socket_create(int argc){
      int sockfd;
 
@@ -122,6 +119,7 @@ int socket_create(int argc){
 
 }
 
+/* Funcao para fazer o bind */
 void make_bind(int sockfd, char *argv[]){
   int portno;
 
@@ -142,13 +140,13 @@ void make_listen(int sockfd){
     listen(sockfd,5);
 }
 
+/* Funcao que realiza o accept dos clientes */
 void make_accept(int sockfd){
     socklen_t clilen;
     int i=0;
     clilen = sizeof(cli_addr);
 
-    /* VER UMA MANEIRA DE FICAR ALWAYS ON - SO FALTA ISSO!! */
-    while( i < QTD_CLIENT){
+    while(i < QTD_CLIENT){
       clientsock[i] = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
         if (clientsock[i] < 0){
           error("ERROR on accept");
@@ -172,11 +170,9 @@ int main(int argc, char *argv[])
     make_bind(sockfd,argv);
     make_listen(sockfd);
 
-    printf("Esperando alguém conectar..\n");
-
     make_accept(sockfd);
 
-    for(i=0; i<QTD_CLIENT; i++){
+    for(i=0; i< QTD_CLIENT; i++){
       pthread_join(thread[i], NULL);
     }
 

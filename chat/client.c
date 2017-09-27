@@ -20,6 +20,7 @@ void error(char *msg){
     exit(0);
 }
 
+/* Funcao que envia uma mensagem ao servidor */
 void* write_socket(void* sockfd){
     char buffer[256], nickname[50];
     int n, msg=1;
@@ -29,7 +30,7 @@ void* write_socket(void* sockfd){
         bzero(buffer,256);
         fgets(buffer,255,stdin);
         strcat(nick, ":");
-        strcat(nick, buffer);
+        strcat(nick, buffer); /* Concatena o nome do cliente com a mensagem */
         n = write(*(int*)sockfd,nick,strlen(nick));
         if (n < 0) error("ERROR writing to socket");
         buffer[strcspn(buffer, "\n")] = 0;
@@ -43,6 +44,7 @@ void* write_socket(void* sockfd){
     return NULL;
 }
 
+/* Funcao que recebe uma mensagem do servidor */
 void* read_socket(void* sockfd){
     char buffer[256];
     int n,msg=1;
