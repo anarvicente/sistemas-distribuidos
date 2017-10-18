@@ -105,9 +105,14 @@ int main(int argc, char *argv[])
   {
       result = (int*) calloc(total_works, sizeof(int));
 
+      /* Preencher o vetor randomicamente */
       for(i=0; i < total_works; i++){
         result[i] = i+1;
       }
+
+      /* TODO: tentar calcular a posicao do elemento no vetor global
+         Calcular o desvio padrao
+      */
       master(rank, size, total_works, result);
   }
   else
@@ -116,6 +121,7 @@ int main(int argc, char *argv[])
   }
 
   MPI_Finalize();
+  //free(result);
   return 0;
 
 }
