@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <math.h>
 
-
 #define TAG_WORK 1
 #define TAG_END 2
 #define TAG_STD 3
@@ -31,8 +30,55 @@ double square_deviation(int part, int *vet, double media_geral)
 }
 
 
-double master(int rank, int size, int works, int *result)
-{
+double desvio_padrao(int rank, int size, int works, int *result, double media){
+
+  int rank_i, work=0, total_works= works, min_sendrecv, part, indice;
+  double ind = 0.0, sum = 0.0;
+  MPI_Status status;
+
+  printf("1- Master send 1 work to all slaves\n");
+  min_sendrecv = (size < total_works) ? size: total_works;
+  part = total_works/size;
+  indice=0;
+
+  for(rank_i=1; rank_i < min_sendrecv; rank_i++)
+  {
+    MPI_Send(&result[indice], 1, MPI_DOUBLE, rank_i, TAG_STD, MPI_COMM_WORLD);
+    work = work + part;
+    indice = rank_i*part;
+  }
+
+  printf("2- Master receive results from slaves and sends new works until ends\n");
+  while(work < total_works)
+  {
+    MPI_Recv(&ind, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    sum = sum + ind;
+    MPI_Send(&result[indice], part, MPI_DOUBLE, status.MPI_SOURCE, TAG_STD, MPI_COMM_WORLD);
+    work = work + part;
+    indice = indice + part;
+  }
+
+  printf("3- Master receive last results from all slaves\n");
+  for(rank_i=1; rank_i < size; rank_i++)
+  {
+    MPI_Recv(&ind,1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    sum = sum + ind;
+  }
+
+  printf("4- Master sends termination TAG\n");
+  for(rank_i=1; rank_i < size; rank_i++)
+  {
+    MPI_Send(0,0, MPI_DOUBLE, rank_i, TAG_END, MPI_COMM_WORLD);
+  }
+
+  double var_med = sum/(double)total_works;
+  double std = sqrt(var_med);
+
+  return std;
+
+}
+
+double media(int rank, int size, int works, int *result){
   int rank_i, work=0, total_works= works, min_sendrecv, part;
   double media_geral = 0.0, ind = 0.0, sum = 0.0;
   MPI_Status status;
@@ -66,50 +112,22 @@ double master(int rank, int size, int works, int *result)
     sum = sum + ind;
   }
 
+  // printf("4- Master sends termination TAG\n");
+  // for(rank_i=1; rank_i < size; rank_i++)
+  // {
+  //   MPI_Send(0,0, MPI_DOUBLE, rank_i, TAG_END, MPI_COMM_WORLD);
+  // }
+
   media_geral = sum/(double)total_works;
-  printf("MEDIA GERAL: %f\n", media_geral);
+  return media_geral;
+}
 
 
-  /* DESVIO PADRAO */
+double master(int rank, int size, int works, int *result)
+{
+  double media_geral = media(rank, size, works, result);
 
-  printf("4- Master send 1 work to all slaves\n");
-  min_sendrecv = (size < total_works) ? size: total_works;
-  part = total_works/size;
-  indice = 0; work = 0; sum=0.0; ind=0.0;
-
-  for(rank_i=1; rank_i < min_sendrecv; rank_i++)
-  {
-    MPI_Send(&result[indice], 1, MPI_DOUBLE, rank_i, TAG_STD, MPI_COMM_WORLD);
-    work = work + part;
-    indice = rank_i*part;
-  }
-
-  printf("5- Master receive results from slaves and sends new works until ends\n");
-  while(work < total_works)
-  {
-    MPI_Recv(&ind, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    sum = sum + ind;
-    MPI_Send(&result[indice], part, MPI_DOUBLE, status.MPI_SOURCE, TAG_STD, MPI_COMM_WORLD);
-    work = work + part;
-    indice = indice + part;
-  }
-
-  printf("6- Master receive last results from all slaves\n");
-  for(rank_i=1; rank_i < size; rank_i++)
-  {
-    MPI_Recv(&ind,1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    sum = sum + ind;
-  }
-
-  printf("7- Master sends termination TAG\n");
-  for(rank_i=1; rank_i < size; rank_i++)
-  {
-    MPI_Send(0,0, MPI_DOUBLE, rank_i, TAG_END, MPI_COMM_WORLD);
-  }
-
-
-  double var = sum/(double)total_works;
-  double std = sqrt(var);
+  double std = desvio_padrao(rank, size, works, result, media_geral);
 
   return std;
 
@@ -124,6 +142,7 @@ int slave(int rank,int size,int total_works)
   int work[part];
   double  result, media_geral=5.5;
 
+
   for(;;)
   {
     MPI_Recv(work, part, MPI_DOUBLE, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -135,7 +154,6 @@ int slave(int rank,int size,int total_works)
     }else{
       result = calculate_sum(rank,part, work);
     }
-
     MPI_Send(&result, 1, MPI_DOUBLE, 0, TAG_WORK, MPI_COMM_WORLD);
   }
   return 0;
@@ -160,16 +178,11 @@ int main(int argc, char *argv[])
   {
       result = (int*) calloc(total_works, sizeof(int));
 
-      /* Preencher o vetor randomicamente */
       for(i=0; i < total_works; i++){
         result[i] = i+1;
       }
       std = master(rank, size, total_works, result);
-
       printf("O desvio padrão é: %f\n", std);
-
-
-
   }
   else
   {
